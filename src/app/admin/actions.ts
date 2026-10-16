@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { gcalDelete, gcalInsert } from '@/lib/gcal';
 import { supabaseSession } from '@/lib/supabase/server';
+import { explain } from '@/lib/errors';
 import { isIsoDay, localToIso } from '@/lib/time';
 
 const TIME_RE = /^\d{2}:\d{2}$/;
@@ -61,7 +62,7 @@ export async function setDaySlots(f: FormData) {
     back(f, {
       error: close
         ? `${close[1]} y ${close[2]} están muy juntos: tiene que entrar el masaje y la pausa entre turnos`
-        : 'No se pudieron guardar los horarios',
+        : `No se pudieron guardar los horarios: ${explain(error)}`,
     });
   }
   back(f, { ok: times.length ? 'Horarios publicados' : 'Día sin horarios' });
@@ -75,7 +76,7 @@ export async function copyWeek(f: FormData) {
   const { data, error } = await supabase.rpc('copy_week_slots', { p_src_monday: from, p_dst_monday: to });
   if (error) {
     const close = /slots_too_close:(\S+)-(\S+)/.exec(error.message);
-    back(f, { error: close ? `No se pudo copiar: ${close[1]} y ${close[2]} quedarían muy juntos` : 'No se pudo copiar la semana' });
+    back(f, { error: close ? `No se pudo copiar: ${close[1]} y ${close[2]} quedarían muy juntos` : `No se pudo copiar la semana: ${explain(error)}` });
   }
   back(f, { ok: data ? `Se copiaron los horarios (${data} en total)` : 'La semana anterior no tenía horarios' });
 }

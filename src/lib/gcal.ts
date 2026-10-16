@@ -46,3 +46,20 @@ export async function gcalDelete(eventId: string | null): Promise<void> {
     if (status !== 404 && status !== 410) throw e;
   }
 }
+
+/** Prueba la conexión: credenciales válidas y calendario compartido con la cuenta de servicio. */
+export async function gcalCheck(): Promise<{ ok: boolean; detail: string }> {
+  if (!enabled()) return { ok: false, detail: 'Faltan GOOGLE_CALENDAR_ID, GOOGLE_SA_EMAIL o GOOGLE_SA_PRIVATE_KEY' };
+  try {
+    await jwt().request({ url: `${base()}?maxResults=1&timeMin=${encodeURIComponent(new Date().toISOString())}` });
+    return { ok: true, detail: `Conectado a ${CALENDAR_ID}` };
+  } catch (e) {
+    const status = (e as { response?: { status?: number } }).response?.status;
+    const msg = (e as Error).message ?? '';
+    if (/DECODER|PEM|private key|asn1/i.test(msg)) return { ok: false, detail: 'La clave privada (GOOGLE_SA_PRIVATE_KEY) está mal pegada' };
+    if (/invalid_grant|invalid_client/i.test(msg)) return { ok: false, detail: 'GOOGLE_SA_EMAIL o la clave no corresponden a la misma cuenta de servicio' };
+    if (status === 404) return { ok: false, detail: `El calendario ${CALENDAR_ID} no está compartido con ${SA_EMAIL}` };
+    if (status === 403) return { ok: false, detail: 'Google Calendar API no está habilitada en el proyecto de Google Cloud, o falta el permiso "Hacer cambios en los eventos"' };
+    return { ok: false, detail: msg.slice(0, 200) };
+  }
+}

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { explain } from '@/lib/errors';
 import { supabaseSession } from '@/lib/supabase/server';
 
 const BUCKET = 'services';
@@ -74,8 +75,8 @@ export async function saveService(f: FormData) {
   if (file) {
     try {
       img = await uploadImage(sb, file, slug);
-    } catch {
-      done({ error: 'No se pudo subir la foto (JPG, PNG o WebP de hasta 2 MB)' });
+    } catch (e) {
+      done({ error: (e as Error).message === 'image' ? 'La foto debe ser JPG, PNG o WebP de hasta 2 MB' : `No se pudo subir la foto: ${explain(e as Error)}` });
     }
   }
   const dropImage = f.get('remove_image') === 'on';
@@ -86,10 +87,10 @@ export async function saveService(f: FormData) {
       : {};
 
   if (current) {
-    const { error } = await sb.from('services').update({ ...fields, ...imageFields }).eq('id', id);
-    if (error) {
+    const { data: updated, error } = await sb.from('services').update({ ...fields, ...imageFields }).eq('id', id).select('id');
+    if (error || !updated?.length) {
       await removeImage(sb, img?.path ?? null);
-      done({ error: 'No se pudo guardar el servicio' });
+      done({ error: `No se pudo guardar el servicio: ${explain(error ?? { code: '42501' })}` });
     }
     if (img || dropImage) await removeImage(sb, current.image_path);
     done({ ok: `“${name}” actualizado` });
@@ -100,7 +101,7 @@ export async function saveService(f: FormData) {
   const { error } = await sb.from('services').insert({ ...fields, ...imageFields, slug, sort: (last?.sort ?? 0) + 1 });
   if (error) {
     await removeImage(sb, img?.path ?? null);
-    done({ error: 'No se pudo crear el servicio' });
+    done({ error: `No se pudo crear el servicio: ${explain(error)}` });
   }
   done({ ok: `“${name}” creado` });
 }
