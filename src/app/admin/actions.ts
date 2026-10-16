@@ -186,27 +186,6 @@ export async function addManualBooking(f: FormData) {
 }
 
 // ---------------------------------------------------------------- Ajustes
-export async function updateService(f: FormData) {
-  const price = str(f, 'price');
-  const duration = Number(str(f, 'duration'));
-  if (!(duration >= 15 && duration <= 240)) back(f, { error: 'La duración debe estar entre 15 y 240 minutos' });
-  const supabase = await supabaseSession();
-  const { error } = await supabase
-    .from('services')
-    .update({
-      name: str(f, 'name'),
-      category: str(f, 'category'),
-      description: str(f, 'description'),
-      duration_min: duration,
-      price: price ? Number(price) : null,
-      active: f.get('active') === 'on',
-      featured: f.get('featured') === 'on',
-    })
-    .eq('id', str(f, 'id'));
-  revalidatePath('/');
-  back(f, error ? { error: 'No se pudo guardar el servicio' } : { ok: 'Servicio actualizado' });
-}
-
 export async function updateSettings(f: FormData) {
   const n = (k: string) => Number(str(f, k));
   const supabase = await supabaseSession();

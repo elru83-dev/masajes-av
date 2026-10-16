@@ -17,6 +17,8 @@ type ServiceRow = {
   featured: boolean;
   active: boolean;
   sort: number;
+  image_url: string | null;
+  image_path: string | null;
 };
 
 type BookingRow = {

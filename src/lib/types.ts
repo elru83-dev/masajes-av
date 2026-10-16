@@ -9,6 +9,8 @@ export type Service = {
   featured: boolean;
   active: boolean;
   sort: number;
+  image_url: string | null;
+  image_path: string | null;
 };
 
 export type BookingStatus = 'pending' | 'confirmed' | 'rejected' | 'cancelled';

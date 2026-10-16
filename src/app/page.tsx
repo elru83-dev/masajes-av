@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { Booking } from '@/components/Booking';
 import { PickService } from '@/components/PickService';
 import { Lockup, Mark } from '@/components/Logo';
@@ -9,6 +10,8 @@ import { waLink } from '@/lib/whatsapp';
 // La lista de servicios se regenera cada 5 minutos; la agenda se consulta en vivo.
 export const revalidate = 300;
 
+const DEV_WA = process.env.NEXT_PUBLIC_DEV_WHATSAPP;
+const MAPS = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent('Barrio Santo Tomás, Pilar, Buenos Aires');
 const WA_CONSULTA = waLink('Hola Alejandra, quiero consultar disponibilidad de turno.');
 const money = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
 
@@ -22,7 +25,7 @@ const CUIDADOS = [
 async function getServices(): Promise<Service[]> {
   const { data } = await supabasePublic()
     .from('services')
-    .select('id,slug,name,category,description,duration_min,price,featured,active,sort')
+    .select('id,slug,name,category,description,duration_min,price,featured,active,sort,image_url,image_path')
     .eq('active', true)
     .order('sort');
   return (data as Service[] | null) ?? [];
@@ -78,8 +81,13 @@ export default async function Home() {
             </div>
             <div className="grid">
               {services.map((s) => (
-                <article key={s.id} className={`card svc-card${s.featured ? ' svc-card--destacada' : ''}`}>
-                  <span className="eyebrow">{s.category}</span>
+                <article key={s.id} className={`card svc-card${s.featured ? ' svc-card--destacada' : ''}${s.image_url ? ' svc-card--foto' : ''}`}>
+                  {s.image_url && (
+                    <div className="svc-img">
+                      <Image src={s.image_url} alt={s.name} fill sizes="(min-width: 1120px) 352px, (min-width: 700px) 50vw, 100vw" />
+                    </div>
+                  )}
+                  {s.category && <span className="eyebrow">{s.category}</span>}
                   <h3 className="svc-title">{s.name}</h3>
                   <p>{s.description}</p>
                   <p className="muted small">{s.duration_min} min · sesión individual</p>
@@ -131,9 +139,9 @@ export default async function Home() {
             <div className="stack">
               <span className="eyebrow eyebrow--claro">Contacto</span>
               <h2 className="h2">¿Tenés dudas? Escribinos</h2>
-              <p className="contact-line"><IconPin /> Barrio Santo Tomás, Pilar, Buenos Aires</p>
-              <p className="contact-line"><IconWhatsApp /> 230 451-3837</p>
-              <p className="contact-line"><IconMail /> <a className="contact-link" href="mailto:av.masajes.integrales@gmail.com">av.masajes.integrales@gmail.com</a></p>
+              <a className="contact-line contact-link" href={MAPS} target="_blank" rel="noopener noreferrer"><IconPin /> Barrio Santo Tomás, Pilar, Buenos Aires</a>
+              <a className="contact-line contact-link" href={WA_CONSULTA} target="_blank" rel="noopener noreferrer"><IconWhatsApp /> 230 451-3837</a>
+              <a className="contact-line contact-link" href="mailto:av.masajes.integrales@gmail.com"><IconMail /> av.masajes.integrales@gmail.com</a>
             </div>
             <div className="cta-row">
               <a className="btn btn--wa" href={WA_CONSULTA} target="_blank" rel="noopener noreferrer"><IconWhatsApp /> Escribir por WhatsApp</a>
@@ -146,7 +154,13 @@ export default async function Home() {
       <footer className="site-footer">
         <div className="wrap site-footer-in">
           <span>© {new Date().getFullYear()} Masajes AV · Ma. Alejandra Villanueva</span>
-          <span>Powered by @RuloOo</span>
+          {DEV_WA ? (
+            <a className="dev-credit" href={waLink('Hola Rulo, vi la web de Masajes AV y quiero consultarte por una página para mi negocio.', DEV_WA)} target="_blank" rel="noopener noreferrer">
+              Powered by @RuloOo
+            </a>
+          ) : (
+            <span>Powered by @RuloOo</span>
+          )}
         </div>
       </footer>
 

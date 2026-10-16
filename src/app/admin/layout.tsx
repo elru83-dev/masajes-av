@@ -19,6 +19,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <Link href="/admin" aria-label="Agenda"><Lockup /></Link>
             <nav className="admin-nav" aria-label="Panel">
               <Link href="/admin">Agenda</Link>
+              <Link href="/admin/servicios">Servicios</Link>
               <Link href="/admin/ajustes">Ajustes</Link>
               <a href="/" target="_blank">Ver sitio</a>
               <form action={signOut}><button className="btn btn--texto" type="submit">Salir</button></form>
