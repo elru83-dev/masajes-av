@@ -58,7 +58,7 @@ Se usa una **cuenta de servicio**: no hace falta que Alejandra inicie sesión co
 1. En [console.cloud.google.com](https://console.cloud.google.com), crear un proyecto y habilitar **Google Calendar API**.
 2. Ir a **IAM y administración → Cuentas de servicio → Crear** (sin roles), y luego **Claves → Agregar clave → JSON**.
 3. En el Google Calendar de Alejandra, ir a **Configuración del calendario → Compartir con personas específicas**. Agregar el email de la cuenta de servicio con el permiso **"Hacer cambios en los eventos"**.
-4. Del JSON se usan `client_email` (va en `GOOGLE_SA_EMAIL`) y `private_key` (va en `GOOGLE_SA_PRIVATE_KEY`). El `GOOGLE_CALENDAR_ID` es `av.masajes.integrales@gmail.com`. El calendario a compartir es el principal de esa cuenta.
+4. En Vercel, pegá **el contenido completo del archivo JSON** (desde `{` hasta `}`) en la variable `GOOGLE_SA_JSON`, y `av.masajes.integrales@gmail.com` en `GOOGLE_CALENDAR_ID`. Como alternativa, se pueden cargar `GOOGLE_SA_EMAIL` y `GOOGLE_SA_PRIVATE_KEY` por separado.
 
 Sin estas variables todo funciona igual, solo que no sincroniza con el calendario.
 

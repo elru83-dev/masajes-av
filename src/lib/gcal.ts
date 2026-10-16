@@ -2,9 +2,30 @@ import 'server-only';
 import { JWT } from 'google-auth-library';
 import { TZ } from './time';
 
-const CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID;
-const SA_EMAIL = process.env.GOOGLE_SA_EMAIL;
-const SA_KEY = process.env.GOOGLE_SA_PRIVATE_KEY?.replace(/\\n/g, '\n');
+/** Limpia lo que suele colarse al pegar en Vercel: espacios, comillas de más y `\n` escritos como texto. */
+const clean = (v?: string) => v?.trim().replace(/^["']|["'],?$/g, '').trim() || undefined;
+
+/**
+ * Credenciales: lo más simple es pegar el archivo JSON completo en GOOGLE_SA_JSON.
+ * Si no está, se usan GOOGLE_SA_EMAIL + GOOGLE_SA_PRIVATE_KEY por separado.
+ */
+function readCredentials(): { email?: string; key?: string; error?: string } {
+  const raw = process.env.GOOGLE_SA_JSON?.trim();
+  if (raw) {
+    try {
+      const j = JSON.parse(raw) as { client_email?: string; private_key?: string };
+      return { email: j.client_email?.trim(), key: j.private_key };
+    } catch {
+      return { error: 'GOOGLE_SA_JSON no es un JSON válido: pegá el contenido completo del archivo, desde { hasta }' };
+    }
+  }
+  return { email: clean(process.env.GOOGLE_SA_EMAIL), key: clean(process.env.GOOGLE_SA_PRIVATE_KEY)?.replace(/\\n/g, '\n') };
+}
+
+const CALENDAR_ID = clean(process.env.GOOGLE_CALENDAR_ID);
+const CREDS = readCredentials();
+const SA_EMAIL = CREDS.email;
+const SA_KEY = CREDS.key;
 
 let client: JWT | null = null;
 
@@ -49,15 +70,24 @@ export async function gcalDelete(eventId: string | null): Promise<void> {
 
 /** Prueba la conexión: credenciales válidas y calendario compartido con la cuenta de servicio. */
 export async function gcalCheck(): Promise<{ ok: boolean; detail: string }> {
-  if (!enabled()) return { ok: false, detail: 'Faltan GOOGLE_CALENDAR_ID, GOOGLE_SA_EMAIL o GOOGLE_SA_PRIVATE_KEY' };
+  if (CREDS.error) return { ok: false, detail: CREDS.error };
+  if (!enabled()) return { ok: false, detail: 'Faltan GOOGLE_CALENDAR_ID y GOOGLE_SA_JSON (o GOOGLE_SA_EMAIL + GOOGLE_SA_PRIVATE_KEY)' };
   try {
     await jwt().request({ url: `${base()}?maxResults=1&timeMin=${encodeURIComponent(new Date().toISOString())}` });
     return { ok: true, detail: `Conectado a ${CALENDAR_ID}` };
   } catch (e) {
     const status = (e as { response?: { status?: number } }).response?.status;
-    const msg = (e as Error).message ?? '';
+    const data = (e as { response?: { data?: { error?: string; error_description?: string } } }).response?.data;
+    const msg = [(e as Error).message, data?.error, data?.error_description].filter(Boolean).join(' · ');
     if (/DECODER|PEM|private key|asn1/i.test(msg)) return { ok: false, detail: 'La clave privada (GOOGLE_SA_PRIVATE_KEY) está mal pegada' };
-    if (/invalid_grant|invalid_client/i.test(msg)) return { ok: false, detail: 'GOOGLE_SA_EMAIL o la clave no corresponden a la misma cuenta de servicio' };
+    if (/invalid_grant|invalid_client|unauthorized_client/i.test(msg)) {
+      return {
+        ok: false,
+        detail:
+          `Google rechazó las credenciales de ${SA_EMAIL ?? '(sin email)'}: ${data?.error_description ?? msg}. ` +
+          'Suele pasar si el email y la clave salieron de archivos JSON distintos, si la clave se borró en Google Cloud o si quedó cortada al pegarla. Solución: pegá el JSON completo en GOOGLE_SA_JSON.',
+      };
+    }
     if (status === 404) return { ok: false, detail: `El calendario ${CALENDAR_ID} no está compartido con ${SA_EMAIL}` };
     if (status === 403) return { ok: false, detail: 'Google Calendar API no está habilitada en el proyecto de Google Cloud, o falta el permiso "Hacer cambios en los eventos"' };
     return { ok: false, detail: msg.slice(0, 200) };
