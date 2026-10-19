@@ -62,11 +62,23 @@ Se usa una **cuenta de servicio**: no hace falta que Alejandra inicie sesión co
 
 Sin estas variables todo funciona igual, solo que no sincroniza con el calendario.
 
-### 3. Variables de entorno
+### 3. Aviso por mail (opcional, recomendado)
+
+Cada pedido de turno nuevo desde la web le manda un mail a Alejandra con el servicio, el día, los datos del cliente y los botones **Abrir panel** y **Escribirle por WhatsApp**. Sale gratis por Gmail.
+
+1. Desde la cuenta `av.masajes.integrales@gmail.com`, activar la **Verificación en 2 pasos** (myaccount.google.com → Seguridad).
+2. Entrar a [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords), crear una contraseña llamada `Web turnos` y copiar el código de 16 letras.
+3. En Vercel cargar `GMAIL_USER=av.masajes.integrales@gmail.com`, `GMAIL_APP_PASSWORD=<código>` y `NEXT_PUBLIC_SITE_URL=<url del sitio>`, y hacer **Redeploy**.
+4. En **/admin/estado** tiene que aparecer **Aviso por mail ✓**.
+5. En la app de Gmail del celular, las notificaciones de esa cuenta tienen que estar en **Todos** (no en "Solo prioridad alta").
+
+Si el mail falla, la reserva se guarda igual: el error queda en los logs de Vercel.
+
+### 4. Variables de entorno
 
 Copiar `.env.example` a `.env.local` y completar los valores.
 
-### 4. Correr y publicar
+### 5. Correr y publicar
 
 ```bash
 npm install
@@ -110,6 +122,7 @@ src/app/api/slots/route.ts          horarios libres de una semana
 src/app/actions.ts                  pedido de turno (server action)
 src/app/admin/…                     panel: login, agenda semanal, servicios con fotos, ajustes
 src/lib/gcal.ts                     Google Calendar (cuenta de servicio)
+src/lib/notify.ts                   aviso por mail de pedidos nuevos (Gmail)
 src/middleware.ts                   protege /admin
 ```
 

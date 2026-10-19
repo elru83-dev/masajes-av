@@ -1,5 +1,7 @@
 'use server';
 
+import { after } from 'next/server';
+import { notifyNewBooking } from '@/lib/notify';
 import { supabasePublic } from '@/lib/supabase/server';
 
 export type BookingState =
@@ -19,14 +21,20 @@ export async function requestBooking(_prev: BookingState, form: FormData): Promi
   if (form.get('website')) return { status: 'ok', start: '', end: '' };
 
   const str = (k: string) => String(form.get(k) ?? '').trim();
+  const serviceId = str('service');
+  const name = str('name');
+  const phone = str('phone');
+  const email = str('email') || null;
+  const notes = str('notes') || null;
 
-  const { data, error } = await supabasePublic().rpc('request_booking', {
-    p_service_id: str('service'),
+  const db = supabasePublic();
+  const { data, error } = await db.rpc('request_booking', {
+    p_service_id: serviceId,
     p_start: str('start'),
-    p_name: str('name'),
-    p_phone: str('phone'),
-    p_email: str('email') || null,
-    p_notes: str('notes') || null,
+    p_name: name,
+    p_phone: phone,
+    p_email: email,
+    p_notes: notes,
   });
 
   if (error) {
@@ -39,5 +47,12 @@ export async function requestBooking(_prev: BookingState, form: FormData): Promi
   }
 
   const row = (data as { booking_start: string; booking_end: string }[])[0];
+
+  // Corre después de responderle al cliente: la reserva no espera al mail.
+  after(async () => {
+    const { data: svc } = await db.from('services').select('name').eq('id', serviceId).maybeSingle<{ name: string }>();
+    await notifyNewBooking({ service: svc?.name ?? 'Masaje', startsAt: row.booking_start, name, phone, email, notes });
+  });
+
   return { status: 'ok', start: row.booking_start, end: row.booking_end };
 }

@@ -1,4 +1,5 @@
 import { gcalCheck } from '@/lib/gcal';
+import { mailCheck } from '@/lib/notify';
 import { explain } from '@/lib/errors';
 import { supabaseSession } from '@/lib/supabase/server';
 
@@ -9,13 +10,14 @@ const has = (k: string) => Boolean(process.env[k]?.trim());
 export default async function EstadoPage() {
   const sb = await supabaseSession();
 
-  const [{ data: { user } }, admin, slots, photos, bucket, gcal] = await Promise.all([
+  const [{ data: { user } }, admin, slots, photos, bucket, gcal, mail] = await Promise.all([
     sb.auth.getUser(),
     sb.rpc('is_admin'),
     sb.from('slots').select('starts_at', { head: true, count: 'exact' }),
     sb.from('services').select('image_url').limit(1),
     sb.storage.from('services').list('', { limit: 1 }),
     gcalCheck(),
+    mailCheck(),
   ]);
 
   const env = ['NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_ANON_KEY', 'NEXT_PUBLIC_WHATSAPP', 'NEXT_PUBLIC_DEV_WHATSAPP'];
@@ -54,6 +56,7 @@ export default async function EstadoPage() {
       fix: 'Ejecutar supabase/migrations/0002_service_photos.sql',
     },
     { name: 'Google Calendar', ok: gcal.ok, detail: gcal.detail, fix: 'Ver README → Google Calendar' },
+    { name: 'Aviso por mail', ok: mail.ok, detail: mail.detail, fix: 'Ver README → Aviso por mail' },
   ];
 
   return (
