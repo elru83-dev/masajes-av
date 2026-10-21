@@ -200,3 +200,16 @@ export async function updateSettings(f: FormData) {
     .eq('id', 1);
   back(f, error ? { error: 'Algún valor está fuera de rango' } : { ok: 'Ajustes guardados' });
 }
+
+const ALIAS_RE = /^[A-Za-z0-9.\-]{0,40}$/;
+
+export async function updateDeposit(f: FormData) {
+  const pct = Math.round(Number(str(f, 'deposit_pct')));
+  const alias = str(f, 'mp_alias').replace(/\s/g, '');
+  if (!(pct >= 1 && pct <= 100)) back(f, { error: 'El porcentaje tiene que estar entre 1 y 100' });
+  if (!ALIAS_RE.test(alias)) back(f, { error: 'El alias solo puede tener letras, números, puntos y guiones' });
+
+  const supabase = await supabaseSession();
+  const { error } = await supabase.from('settings').update({ deposit_pct: pct, mp_alias: alias }).eq('id', 1);
+  back(f, error ? { error: `No se pudo guardar: ${explain(error)}` } : { ok: 'Seña guardada' });
+}

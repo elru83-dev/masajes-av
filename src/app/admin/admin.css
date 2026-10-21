@@ -27,6 +27,9 @@
 .bk-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .bk-tags { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-1); }
 .bk-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.deposit-check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; user-select: none; }
+.deposit-check input { width: 18px; height: 18px; accent-color: var(--eucalipto); }
+.deposit-check:has(input:disabled) { opacity: .5; cursor: not-allowed; }
 
 .ov { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 2px var(--space-3); border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; }
 .ov--block { background: #F6E1DF; color: var(--alerta); }

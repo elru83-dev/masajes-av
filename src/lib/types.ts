@@ -26,11 +26,13 @@ export type Booking = {
   notes: string;
   status: BookingStatus;
   gcal_event_id: string | null;
-  services: { name: string } | null;
+  services: { name: string; price: number | null } | null;
 };
 
 export type Settings = {
   buffer_min: number;
   min_notice_hours: number;
   max_days_ahead: number;
+  deposit_pct: number;
+  mp_alias: string;
 };

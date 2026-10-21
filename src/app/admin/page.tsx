@@ -1,11 +1,11 @@
 import Link from 'next/link';
-import { IconWhatsApp } from '@/components/Icons';
 import { supabaseSession } from '@/lib/supabase/server';
 import { addDays, dayOf, fmtLongDay, fmtTime, fmtWeekRange, isIsoDay, localToIso, today, weekDays, weekStart } from '@/lib/time';
 import type { Booking } from '@/lib/types';
-import { toWaPhone, waLink } from '@/lib/whatsapp';
+import { toWaPhone } from '@/lib/whatsapp';
 import { addManualBooking, cancelBooking, confirmBooking, copyWeek, rejectBooking, setDaySlots } from './actions';
 import { Flash } from './Flash';
+import { WhatsAppButton } from './WhatsAppButton';
 
 type Search = Promise<{ semana?: string; ok?: string; error?: string }>;
 
@@ -36,17 +36,39 @@ export default async function AgendaPage({ searchParams }: { searchParams: Searc
     supabase.from('slots').select('starts_at').gte('starts_at', from).lt('starts_at', to).order('starts_at'),
     supabase
       .from('bookings')
-      .select('id,service_id,starts_at,ends_at,client_name,client_phone,client_email,notes,status,gcal_event_id,services(name)')
+      .select('id,service_id,starts_at,ends_at,client_name,client_phone,client_email,notes,status,gcal_event_id,services(name,price)')
       .in('status', ['pending', 'confirmed'])
       .gte('starts_at', from)
       .lt('starts_at', to)
       .order('starts_at')
       .returns<Booking[]>(),
     supabase.from('services').select('id,name,duration_min').eq('active', true).order('sort'),
-    supabase.from('settings').select('buffer_min').eq('id', 1).maybeSingle<{ buffer_min: number }>(),
+    supabase
+      .from('settings')
+      .select('buffer_min,deposit_pct,mp_alias')
+      .eq('id', 1)
+      .maybeSingle<{ buffer_min: number; deposit_pct: number; mp_alias: string }>(),
   ]);
 
   const list = bookings.data ?? [];
+
+  // Clientes que ya vinieron alguna vez (turno confirmado que ya pasó). Una sola consulta por semana,
+  // filtrada a los teléfonos que aparecen; usa el índice bookings_phone_confirmed_idx.
+  const phones = [...new Set(list.map((b) => b.client_phone))];
+  const returning = new Set<string>();
+  if (phones.length) {
+    const { data } = await supabase
+      .from('bookings')
+      .select('client_phone')
+      .eq('status', 'confirmed')
+      .lt('starts_at', new Date().toISOString())
+      .in('client_phone', phones);
+    for (const r of data ?? []) returning.add(r.client_phone);
+  }
+  const deposit: DepositConfig = {
+    pct: settings.data?.deposit_pct ?? 30,
+    alias: settings.data?.mp_alias ?? '',
+  };
   const pending = list.filter((b) => b.status === 'pending');
   const key = (iso: string) => new Date(iso).toISOString().slice(0, 16);
   const bookingAt = new Map(list.map((b) => [key(b.starts_at), b]));
@@ -105,7 +127,9 @@ export default async function AgendaPage({ searchParams }: { searchParams: Searc
         <section className="stack">
           <h2 className="h3">Por confirmar</h2>
           <div className="booking-list">
-            {pending.map((b) => <BookingRow key={b.id} b={b} backUrl={backUrl} covers={covers.get(b.id)} showDay />)}
+            {pending.map((b) => (
+              <BookingRow key={b.id} b={b} backUrl={backUrl} covers={covers.get(b.id)} deposit={deposit} isNew={!returning.has(b.client_phone)} showDay />
+            ))}
           </div>
         </section>
       )}
@@ -155,7 +179,9 @@ export default async function AgendaPage({ searchParams }: { searchParams: Searc
 
               {dayBookings.length > 0 && (
                 <div className="booking-list">
-                  {dayBookings.map((b) => <BookingRow key={b.id} b={b} backUrl={backUrl} covers={covers.get(b.id)} />)}
+                  {dayBookings.map((b) => (
+                    <BookingRow key={b.id} b={b} backUrl={backUrl} covers={covers.get(b.id)} deposit={deposit} isNew={!returning.has(b.client_phone)} />
+                  ))}
                 </div>
               )}
             </article>
@@ -198,12 +224,29 @@ export default async function AgendaPage({ searchParams }: { searchParams: Searc
   );
 }
 
-function BookingRow({ b, backUrl, covers, showDay = false }: { b: Booking; backUrl: string; covers?: string[]; showDay?: boolean }) {
+type DepositConfig = { pct: number; alias: string };
+
+const money = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
+
+function BookingRow({ b, backUrl, covers, deposit, isNew, showDay = false }: {
+  b: Booking; backUrl: string; covers?: string[]; deposit: DepositConfig; isNew: boolean; showDay?: boolean;
+}) {
   const service = b.services?.name ?? 'Masaje';
+  const price = b.services?.price ?? null;
   const when = `${showDay ? `${fmtLongDay(dayOf(b.starts_at))} · ` : ''}${fmtTime(b.starts_at)}–${fmtTime(b.ends_at)}`;
-  const confirmText =
-    `Hola ${b.client_name.split(' ')[0]}, te confirmo tu turno de ${service} el ` +
-    `${fmtLongDay(dayOf(b.starts_at)).toLowerCase()} a las ${fmtTime(b.starts_at)} hs. ¡Te espero! — Alejandra, Masajes AV`;
+  const first = b.client_name.split(' ')[0];
+  const turno = `tu turno de ${service} el ${fmtLongDay(dayOf(b.starts_at)).toLowerCase()} a las ${fmtTime(b.starts_at)} hs`;
+  const confirmText = `Hola ${first}, te confirmo ${turno}. ¡Te espero! — Alejandra, Masajes AV`;
+
+  // Seña: % del precio, redondeado a $100.
+  const amount = price ? Math.max(100, Math.round((price * deposit.pct) / 100 / 100) * 100) : 0;
+  const canDeposit = amount > 0 && deposit.alias !== '';
+  const depositText = canDeposit
+    ? `Hola ${first}, te reservé ${turno}. Para confirmarlo te pido una seña de ${money.format(amount)} ` +
+      `(${deposit.pct}% del valor) por Mercado Pago al alias *${deposit.alias}*. ` +
+      `Cuando la transfieras, mandame el comprobante por acá y te queda confirmado. ¡Gracias! — Alejandra, Masajes AV`
+    : null;
+  const disabledReason = !deposit.alias ? 'Cargá el alias de Mercado Pago en Ajustes' : 'El servicio no tiene precio cargado';
 
   return (
     <div className={`bk bk--${b.status}`}>
@@ -213,14 +256,20 @@ function BookingRow({ b, backUrl, covers, showDay = false }: { b: Booking; backU
         {b.notes && <span className="muted small">“{b.notes}”</span>}
         <span className="bk-tags">
           <span className={b.status === 'pending' ? 'tag tag--piel' : 'tag'}>{STATUS[b.status as keyof typeof STATUS]}</span>
+          {isNew && <span className="tag tag--alerta">Cliente nuevo</span>}
           {covers && <span className="tag tag--piel">Ocupa también {covers.join(', ')}</span>}
           {b.gcal_event_id && <span className="tag tag--gris">En Google Calendar</span>}
         </span>
       </div>
       <div className="bk-actions">
-        <a className="btn btn--wa btn--sm" href={waLink(confirmText, toWaPhone(b.client_phone))} target="_blank" rel="noopener noreferrer">
-          <IconWhatsApp /> {b.status === 'pending' ? 'Escribir' : 'Avisar'}
-        </a>
+        <WhatsAppButton
+          phone={toWaPhone(b.client_phone)}
+          label={b.status === 'pending' ? 'Escribir' : 'Avisar'}
+          text={confirmText}
+          depositText={depositText}
+          depositLabel={canDeposit ? money.format(amount) : undefined}
+          disabledReason={disabledReason}
+        />
         {b.status === 'pending' && (
           <>
             <ActionButton action={confirmBooking} id={b.id} backUrl={backUrl} className="btn btn--primario btn--sm">Confirmar</ActionButton>

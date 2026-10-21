@@ -39,7 +39,15 @@ type BookingRow = {
 export type Database = {
   public: {
     Tables: {
-      settings: Table<{ id: number; tz: string; buffer_min: number; min_notice_hours: number; max_days_ahead: number }>;
+      settings: Table<{
+        id: number;
+        tz: string;
+        buffer_min: number;
+        min_notice_hours: number;
+        max_days_ahead: number;
+        deposit_pct: number;
+        mp_alias: string;
+      }>;
       services: Table<ServiceRow, 'slug' | 'name'>;
       slots: Table<{ starts_at: string; created_at: string }, 'starts_at'>;
       bookings: {
