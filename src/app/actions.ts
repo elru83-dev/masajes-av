@@ -46,12 +46,22 @@ export async function requestBooking(_prev: BookingState, form: FormData): Promi
     };
   }
 
-  const row = (data as { booking_start: string; booking_end: string }[])[0];
+  const row = data[0];
 
   // Corre después de responderle al cliente: la reserva no espera al mail.
   after(async () => {
     const { data: svc } = await db.from('services').select('name').eq('id', serviceId).maybeSingle<{ name: string }>();
-    await notifyNewBooking({ service: svc?.name ?? 'Masaje', startsAt: row.booking_start, name, phone, email, notes });
+    await notifyNewBooking({
+      service: svc?.name ?? 'Masaje',
+      startsAt: row.booking_start,
+      endsAt: row.booking_end,
+      covers: row.covered_slots ?? [],
+      nextFree: row.next_free,
+      name,
+      phone,
+      email,
+      notes,
+    });
   });
 
   return { status: 'ok', start: row.booking_start, end: row.booking_end };

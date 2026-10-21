@@ -32,7 +32,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Searc
   const backUrl = `/admin?semana=${monday}`;
   const supabase = await supabaseSession();
 
-  const [slots, bookings, services] = await Promise.all([
+  const [slots, bookings, services, settings] = await Promise.all([
     supabase.from('slots').select('starts_at').gte('starts_at', from).lt('starts_at', to).order('starts_at'),
     supabase
       .from('bookings')
@@ -43,6 +43,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Searc
       .order('starts_at')
       .returns<Booking[]>(),
     supabase.from('services').select('id,name,duration_min').eq('active', true).order('sort'),
+    supabase.from('settings').select('buffer_min').eq('id', 1).maybeSingle<{ buffer_min: number }>(),
   ]);
 
   const list = bookings.data ?? [];
@@ -52,6 +53,27 @@ export default async function AgendaPage({ searchParams }: { searchParams: Searc
   const slotsByDay = groupByDay(slots.data ?? [], (s) => dayOf(s.starts_at));
   const bookingsByDay = groupByDay(list, (b) => dayOf(b.starts_at));
   const totalSlots = slots.data?.length ?? 0;
+
+  // Horarios publicados que tapa un turno que empezó antes (masaje largo o su pausa).
+  // Por día hay pocos turnos, así que la búsqueda lineal es lo más barato.
+  const bufMs = (settings.data?.buffer_min ?? 0) * 60_000;
+  const blockedBy = new Map<string, Booking>();
+  const covers = new Map<string, string[]>();
+  for (const [d, daySlots] of slotsByDay) {
+    const dayBookings = bookingsByDay.get(d);
+    if (!dayBookings) continue;
+    for (const s of daySlots) {
+      const k = key(s.starts_at);
+      if (bookingAt.has(k)) continue;
+      const t = Date.parse(s.starts_at);
+      const b = dayBookings.find((x) => Date.parse(x.starts_at) < t && t < Date.parse(x.ends_at) + bufMs);
+      if (!b) continue;
+      blockedBy.set(k, b);
+      const arr = covers.get(b.id);
+      if (arr) arr.push(fmtTime(s.starts_at));
+      else covers.set(b.id, [fmtTime(s.starts_at)]);
+    }
+  }
   const days = weekDays(monday);
 
   return (
@@ -83,7 +105,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Searc
         <section className="stack">
           <h2 className="h3">Por confirmar</h2>
           <div className="booking-list">
-            {pending.map((b) => <BookingRow key={b.id} b={b} backUrl={backUrl} showDay />)}
+            {pending.map((b) => <BookingRow key={b.id} b={b} backUrl={backUrl} covers={covers.get(b.id)} showDay />)}
           </div>
         </section>
       )}
@@ -102,11 +124,17 @@ export default async function AgendaPage({ searchParams }: { searchParams: Searc
               {daySlots.length > 0 ? (
                 <ul className="slot-chips" aria-label="Horarios publicados">
                   {daySlots.map((s) => {
-                    const b = bookingAt.get(key(s.starts_at));
+                    const k = key(s.starts_at);
+                    const b = bookingAt.get(k);
+                    const by = b ? undefined : blockedBy.get(k);
                     return (
-                      <li key={s.starts_at} className={`slot-chip slot-chip--${b?.status ?? 'free'}`}>
+                      <li
+                        key={s.starts_at}
+                        className={`slot-chip slot-chip--${b?.status ?? (by ? 'blocked' : 'free')}`}
+                        title={by ? `Lo ocupa el turno de las ${fmtTime(by.starts_at)} (${by.client_name}, hasta ${fmtTime(by.ends_at)})` : undefined}
+                      >
                         <strong>{fmtTime(s.starts_at)}</strong>
-                        <span>{b ? b.client_name.split(' ')[0] : 'Libre'}</span>
+                        <span>{b ? b.client_name.split(' ')[0] : by ? 'Ocupado' : 'Libre'}</span>
                       </li>
                     );
                   })}
@@ -127,7 +155,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Searc
 
               {dayBookings.length > 0 && (
                 <div className="booking-list">
-                  {dayBookings.map((b) => <BookingRow key={b.id} b={b} backUrl={backUrl} />)}
+                  {dayBookings.map((b) => <BookingRow key={b.id} b={b} backUrl={backUrl} covers={covers.get(b.id)} />)}
                 </div>
               )}
             </article>
@@ -137,7 +165,8 @@ export default async function AgendaPage({ searchParams }: { searchParams: Searc
 
       <p className="muted small">
         Escribí los horarios de inicio separados por coma, como los mandás por WhatsApp. Los horarios con turno tomado se
-        mantienen aunque los borres; para liberarlos, cancelá o rechazá el turno.
+        mantienen aunque los borres; para liberarlos, cancelá o rechazá el turno. Si un masaje largo pasa por encima del
+        horario siguiente, ese horario aparece como <strong>Ocupado</strong> y deja de ofrecerse en la web.
       </p>
 
       {/* Turno manual */}
@@ -169,7 +198,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Searc
   );
 }
 
-function BookingRow({ b, backUrl, showDay = false }: { b: Booking; backUrl: string; showDay?: boolean }) {
+function BookingRow({ b, backUrl, covers, showDay = false }: { b: Booking; backUrl: string; covers?: string[]; showDay?: boolean }) {
   const service = b.services?.name ?? 'Masaje';
   const when = `${showDay ? `${fmtLongDay(dayOf(b.starts_at))} · ` : ''}${fmtTime(b.starts_at)}–${fmtTime(b.ends_at)}`;
   const confirmText =
@@ -184,6 +213,7 @@ function BookingRow({ b, backUrl, showDay = false }: { b: Booking; backUrl: stri
         {b.notes && <span className="muted small">“{b.notes}”</span>}
         <span className="bk-tags">
           <span className={b.status === 'pending' ? 'tag tag--piel' : 'tag'}>{STATUS[b.status as keyof typeof STATUS]}</span>
+          {covers && <span className="tag tag--piel">Ocupa también {covers.join(', ')}</span>}
           {b.gcal_event_id && <span className="tag tag--gris">En Google Calendar</span>}
         </span>
       </div>

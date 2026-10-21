@@ -67,7 +67,13 @@ export type Database = {
           p_email?: string | null;
           p_notes?: string | null;
         };
-        Returns: { booking_id: string; booking_start: string; booking_end: string }[];
+        Returns: {
+          booking_id: string;
+          booking_start: string;
+          booking_end: string;
+          covered_slots: string[];
+          next_free: string;
+        }[];
       };
       set_day_slots: { Args: { p_day: string; p_times: string[] }; Returns: number };
       copy_week_slots: { Args: { p_src_monday: string; p_dst_monday: string }; Returns: number };

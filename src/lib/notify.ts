@@ -11,6 +11,11 @@ import { toWaPhone } from './whatsapp';
 export type NewBooking = {
   service: string;
   startsAt: string;
+  endsAt: string;
+  /** Horarios publicados que este turno tapa (ya no se ofrecen en la web). */
+  covers: string[];
+  /** Desde cuándo se puede volver a publicar un horario (fin + pausa). */
+  nextFree: string;
   name: string;
   phone: string;
   email?: string | null;
@@ -32,6 +37,9 @@ const fmt = new Intl.DateTimeFormat('es-AR', {
   timeZone: TZ, weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
 });
 
+const hm = new Intl.DateTimeFormat('es-AR', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false });
+const hhmm = (iso: string) => hm.format(new Date(iso));
+
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ESC[c]);
 
@@ -46,18 +54,26 @@ const button = (href: string, text: string, bg: string) =>
 export async function notifyNewBooking(b: NewBooking): Promise<void> {
   if (!mailer) return;
 
-  const when = fmt.format(new Date(b.startsAt));
+  const when = `${fmt.format(new Date(b.startsAt))} a ${hhmm(b.endsAt)}`;
   const wa = `https://wa.me/${toWaPhone(b.phone)}`;
   const panel = SITE ? `${SITE}/admin` : '';
+
+  // Turno largo: avisa qué horario(s) quedaron ocupados y desde cuándo se puede publicar otro.
+  const covered = b.covers.map(hhmm).join(', ');
+  const warning = covered
+    ? `Este turno ocupa también ${b.covers.length > 1 ? 'los horarios de las' : 'el horario de las'} ${covered}, ` +
+      `que se sacó de la web automáticamente. Si querés reemplazarlo, podés publicar un horario nuevo desde las ${hhmm(b.nextFree)}.`
+    : '';
 
   try {
     await mailer.sendMail({
       from: `"Turnos Masajes AV" <${USER}>`,
       to: TO,
       replyTo: b.email || undefined, // "Responder" en Gmail le escribe al cliente
-      subject: `Nuevo turno por confirmar · ${b.service} · ${when}`,
+      subject: `Nuevo turno por confirmar · ${b.service} · ${when}${covered ? ` · ocupa ${covered}` : ''}`,
       text: [
         'Pedido nuevo de turno', '',
+        warning && `⚠ ${warning}\n`,
         `Servicio: ${b.service}`,
         `Día y hora: ${when}`,
         `Cliente: ${b.name}`,
@@ -69,6 +85,7 @@ export async function notifyNewBooking(b: NewBooking): Promise<void> {
       html: `
 <div style="font-family:system-ui,-apple-system,Arial,sans-serif;max-width:480px;margin:auto;color:#222;font-size:15px">
   <h2 style="margin:0 0 12px;font-size:20px">Nuevo turno por confirmar</h2>
+  ${warning ? `<p style="margin:0 0 14px;padding:10px 12px;border-radius:8px;background:#fff4e0;border-left:4px solid #e0a030">⚠ ${esc(warning)}</p>` : ''}
   <table style="border-collapse:collapse;width:100%">
     ${row('Servicio', b.service, true)}
     ${row('Día y hora', when, true)}
