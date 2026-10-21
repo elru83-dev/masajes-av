@@ -6,6 +6,8 @@ export type Service = {
   description: string;
   duration_min: number;
   price: number | null;
+  /** Solo en el panel: si el precio se muestra en la web. */
+  show_price?: boolean;
   featured: boolean;
   active: boolean;
   sort: number;

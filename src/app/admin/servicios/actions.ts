@@ -59,6 +59,7 @@ export async function saveService(f: FormData) {
     description: str(f, 'description').slice(0, 280),
     duration_min: duration,
     price: priceRaw ? Number(priceRaw) : null,
+    show_price: f.get('show_price') === 'on',
     active: f.get('active') === 'on',
     featured: f.get('featured') === 'on',
   };

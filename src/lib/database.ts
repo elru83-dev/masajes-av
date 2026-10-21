@@ -14,12 +14,16 @@ type ServiceRow = {
   description: string;
   duration_min: number;
   price: number | null;
+  show_price: boolean;
   featured: boolean;
   active: boolean;
   sort: number;
   image_url: string | null;
   image_path: string | null;
 };
+
+/** Lo que ve la web pública (vista services_web): precio null si está oculto. */
+type ServiceWebRow = Omit<ServiceRow, 'show_price'>;
 
 type BookingRow = {
   id: string;
@@ -60,7 +64,9 @@ export type Database = {
       };
       admins: Table<{ user_id: string }, 'user_id'>;
     };
-    Views: Record<string, never>;
+    Views: {
+      services_web: { Row: ServiceWebRow; Relationships: [] };
+    };
     Functions: {
       get_slots: {
         Args: { p_service_id: string; p_from: string; p_to: string };

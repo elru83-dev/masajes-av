@@ -50,7 +50,7 @@ export async function requestBooking(_prev: BookingState, form: FormData): Promi
 
   // Corre después de responderle al cliente: la reserva no espera al mail.
   after(async () => {
-    const { data: svc } = await db.from('services').select('name').eq('id', serviceId).maybeSingle<{ name: string }>();
+    const { data: svc } = await db.from('services_web').select('name').eq('id', serviceId).maybeSingle<{ name: string }>();
     await notifyNewBooking({
       service: svc?.name ?? 'Masaje',
       startsAt: row.booking_start,

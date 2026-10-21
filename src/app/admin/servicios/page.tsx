@@ -45,6 +45,7 @@ export default async function ServiciosPage({ searchParams }: { searchParams: Pr
                 <span className="bk-tags">
                   {s.active ? <span className="tag">Visible</span> : <span className="tag tag--gris">Oculto</span>}
                   {s.featured && <span className="tag tag--piel">Destacado</span>}
+                  {s.price != null && !s.show_price && <span className="tag tag--gris">Precio oculto</span>}
                 </span>
               </div>
               <div className="svc-order">

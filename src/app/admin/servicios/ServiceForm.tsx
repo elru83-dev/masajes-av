@@ -97,10 +97,11 @@ export function ServiceForm({ service }: { service?: Service }) {
           <input id={`m-${id}`} type="number" name="duration" className="input" min={15} max={240} step={5} defaultValue={service?.duration_min ?? 60} required />
         </div>
         <div className="field"><label htmlFor={`p-${id}`}>Precio ($)</label>
-          <input id={`p-${id}`} type="number" name="price" className="input" min={0} step={100} defaultValue={service?.price ?? ''} placeholder="Vacío = consultar" />
+          <input id={`p-${id}`} type="number" name="price" className="input" min={0} step={100} defaultValue={service?.price ?? ''} placeholder="Se usa para calcular la seña" />
         </div>
       </div>
       <label className="check"><input type="checkbox" name="active" defaultChecked={service?.active ?? true} /> Visible en la web</label>
+      <label className="check"><input type="checkbox" name="show_price" defaultChecked={service?.show_price ?? false} /> Precio visible <span className="muted small">(destildado: en la web dice «Consultá el valor», pero se usa para la seña)</span></label>
       <label className="check"><input type="checkbox" name="featured" defaultChecked={service?.featured ?? false} /> Destacado (fondo piel)</label>
       <Submit busy={busy} label={service ? 'Guardar cambios' : 'Crear servicio'} />
     </form>

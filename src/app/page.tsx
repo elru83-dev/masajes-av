@@ -24,9 +24,8 @@ const CUIDADOS = [
 
 async function getServices(): Promise<Service[]> {
   const { data } = await supabasePublic()
-    .from('services')
+    .from('services_web') // vista pública: trae price = null si el precio está oculto
     .select('id,slug,name,category,description,duration_min,price,featured,active,sort,image_url,image_path')
-    .eq('active', true)
     .order('sort');
   return (data as Service[] | null) ?? [];
 }
